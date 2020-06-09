@@ -119,7 +119,30 @@ long LinuxParser::ActiveJiffies() { return 0; }
 long LinuxParser::IdleJiffies() { return 0; }
 
 // TODO: Read and return CPU utilization
-vector<string> LinuxParser::CpuUtilization() { return {}; }
+vector<string> LinuxParser::CpuUtilization() { string line;
+  string key;
+  string user, nice, system, idle, iowait, irq, softirq, steal;
+  vector<string> cpu_utilization = {};
+  std::ifstream filestream(kProcDirectory + kStatFilename);
+  if (filestream.is_open()) {
+    while (std::getline(filestream, line)) {
+      std::istringstream linestream(line);
+      while (linestream >> key >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal) {
+        if (key == "cpu") {
+          cpu_utilization.push_back(user);
+          cpu_utilization.push_back(nice);
+          cpu_utilization.push_back(system);
+          cpu_utilization.push_back(idle);
+          cpu_utilization.push_back(iowait);
+          cpu_utilization.push_back(irq);
+          cpu_utilization.push_back(softirq);
+          cpu_utilization.push_back(steal);
+        }
+      }
+    }
+  }
+  return cpu_utilization;
+}
 
 // TODO: Read and return the total number of processes
 int LinuxParser::TotalProcesses() {
