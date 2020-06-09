@@ -1,3 +1,4 @@
+#include <iostream>
 #include <dirent.h>
 #include <unistd.h>
 #include <string>
@@ -188,20 +189,155 @@ int LinuxParser::RunningProcesses() {
 
 // TODO: Read and return the command associated with a process
 // REMOVE: [[maybe_unused]] once you define the function
-string LinuxParser::Command(int pid[[maybe_unused]]) { return string(); }
+string LinuxParser::Command(int pid) {
+  string pidDirectory{"/" + std::to_string(pid)};
+  string command;
+  string line;
+  std::ifstream filestream(kProcDirectory + pidDirectory + kCmdlineFilename);
+  if (filestream.is_open()) {
+    std::getline(filestream, line);
+    std::istringstream linestream(line);
+    linestream >> command;
+  }
+  return command;
+}
 
 // TODO: Read and return the memory used by a process
 // REMOVE: [[maybe_unused]] once you define the function
-string LinuxParser::Ram(int pid[[maybe_unused]]) { return string(); }
+string LinuxParser::Ram(int pid) {
+  string pidDirectory{"/" + std::to_string(pid)};
+  string ram;
+  string line;
+  string key;
+  string value;
+  std::ifstream filestream(kProcDirectory + "/" + to_string(pid) + kStatusFilename);
+  if (filestream.is_open()) {
+    while (std::getline(filestream, line)) {
+      std::replace(line.begin(), line.end(), ' ', '_');
+      std::replace(line.begin(), line.end(), ':', ' ');
+      std::istringstream linestream(line);
+      while (linestream >> key >> value) {
+        if (key == "VmSize") {
+          std::replace(value.begin(), value.end(), '_', ' ');
+          int ram_kb = std::stoi(value);
+          ram = std::to_string(ram_kb/1000);
+          return ram;
+        }
+      }
+    }
+  }
+  return ram;
+}
 
 // TODO: Read and return the user ID associated with a process
 // REMOVE: [[maybe_unused]] once you define the function
-string LinuxParser::Uid(int pid[[maybe_unused]]) { return string(); }
+string LinuxParser::Uid(int pid) {
+  string pidDirectory{"/" + std::to_string(pid)};
+  string uid;
+  string line;
+  string key;
+  string value;
+  std::ifstream filestream(kProcDirectory + pidDirectory + kStatusFilename);
+  if (filestream.is_open()) {
+    while (std::getline(filestream, line)) {
+      std::replace(line.begin(), line.end(), ' ', '_');
+      std::replace(line.begin(), line.end(), ':', ' ');
+      std::istringstream linestream(line);
+      while (linestream >> key >> value) {
+        if (key == "Uid") {
+          std::replace(value.begin(), value.end(), '_', ' ');
+          return value;
+        }
+      }
+    }
+  }
+  return uid;
+}
 
 // TODO: Read and return the user associated with a process
 // REMOVE: [[maybe_unused]] once you define the function
-string LinuxParser::User(int pid[[maybe_unused]]) { return string(); }
+string LinuxParser::User(int pid) {
+  int uid{std::stoi(LinuxParser::Uid(pid))};
+  string user;
+  string line;
+  std::ifstream filestream(kPasswordPath);
+  if (filestream.is_open()) {
+    while (std::getline(filestream, line)) {
+      std::replace(line.begin(), line.end(), ':', ' ');
+      std::istringstream linestream(line);
+      int idx{0};
+      while (!linestream.eof()) {
+        if (idx == uid) {
+          linestream >> user;
+          return user;
+        }
+        idx ++;
+      }
+    }
+  }
+  return user;
+}
 
 // TODO: Read and return the uptime of a process
 // REMOVE: [[maybe_unused]] once you define the function
-long LinuxParser::UpTime(int pid[[maybe_unused]]) { return 0; }
+long LinuxParser::UpTime(int pid) {
+  string pidDirectory{"/" + std::to_string(pid)};
+  long uptime{0};
+  string line;
+  string value;
+  std::ifstream filestream(kProcDirectory + pidDirectory + kStatFilename);
+  if (filestream.is_open()) {
+    std::getline(filestream, line);
+    std::istringstream linestream(line);
+    int idx{1};
+    while (idx <= 22) {
+      linestream >> value;
+      if (idx == 22) {
+        uptime = std::stoi(value);
+        return uptime / sysconf(_SC_CLK_TCK);
+      }
+      idx ++;
+    }
+
+
+  }
+  return uptime;
+}
+
+// TODO: Read and return CPU utilization of a process
+float LinuxParser::CpuUtilization(int pid) {
+  string pidDirectory = "/" + std::to_string(pid);
+  float utime, stime, cutime, cstime, starttime;
+  float Hertz{sysconf(_SC_CLK_TCK)};
+  long uptime = UpTime();
+  string line;
+  string value;
+  std::ifstream filestream(kProcDirectory + pidDirectory + kStatFilename);
+  if (filestream.is_open()) {
+    std::getline(filestream, line);
+    std::istringstream linestream(line);
+    int idx{1};
+    while (idx <= 22) {
+      linestream >> value;
+      if (idx == 14)
+        utime = std::stoi(value);
+      if (idx == 15)
+        stime = std::stoi(value);
+      if (idx == 16)
+        cutime = std::stoi(value);
+      if (idx == 17)
+        cstime = std::stoi(value);
+      if (idx == 22)
+        starttime = std::stoi(value);
+      idx ++;
+    }
+  }
+  // First we determine the total time spent for the process:
+  // We also have to decide whether we want to include the time from children processes. If we do, then we add those values to total_time:
+  int total_time = utime + stime + cutime + cstime;
+  // Next we get the total elapsed time in seconds since the process started:
+  float seconds = uptime - (starttime / Hertz);
+  // Finally we calculate the CPU usage percentage:
+  float cpu_usage = (total_time / Hertz) / seconds;
+  return cpu_usage;
+}
