@@ -122,22 +122,17 @@ long LinuxParser::IdleJiffies() { return 0; }
 // TODO: Read and return CPU utilization
 vector<string> LinuxParser::CpuUtilization() { string line;
   string key;
-  string user, nice, system, idle, iowait, irq, softirq, steal;
+  string value;
   vector<string> cpu_utilization = {};
   std::ifstream filestream(kProcDirectory + kStatFilename);
   if (filestream.is_open()) {
     while (std::getline(filestream, line)) {
       std::istringstream linestream(line);
-      while (linestream >> key >> user >> nice >> system >> idle >> iowait >> irq >> softirq >> steal) {
-        if (key == "cpu") {
-          cpu_utilization.push_back(user);
-          cpu_utilization.push_back(nice);
-          cpu_utilization.push_back(system);
-          cpu_utilization.push_back(idle);
-          cpu_utilization.push_back(iowait);
-          cpu_utilization.push_back(irq);
-          cpu_utilization.push_back(softirq);
-          cpu_utilization.push_back(steal);
+      if (linestream >> key && key == "cpu") {
+        int idx{0};
+        while (linestream >> value) {
+          cpu_utilization.push_back(value);
+          idx ++;
         }
       }
     }
@@ -308,7 +303,6 @@ long LinuxParser::UpTime(int pid) {
 float LinuxParser::CpuUtilization(int pid) {
   string pidDirectory = "/" + std::to_string(pid);
   float utime, stime, cutime, cstime, starttime;
-  float Hertz{sysconf(_SC_CLK_TCK)};
   long uptime = UpTime();
   string line;
   string value;
@@ -336,8 +330,8 @@ float LinuxParser::CpuUtilization(int pid) {
   // We also have to decide whether we want to include the time from children processes. If we do, then we add those values to total_time:
   int total_time = utime + stime + cutime + cstime;
   // Next we get the total elapsed time in seconds since the process started:
-  float seconds = uptime - (starttime / Hertz);
+  float seconds = uptime - (starttime / sysconf(_SC_CLK_TCK));
   // Finally we calculate the CPU usage percentage:
-  float cpu_usage = (total_time / Hertz) / seconds;
+  float cpu_usage = (total_time / sysconf(_SC_CLK_TCK)) / seconds;
   return cpu_usage;
 }
